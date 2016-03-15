@@ -4182,21 +4182,24 @@ private:
     unsigned slot1;
     unsigned depth;
 };
+
 //------------------------------------------------------------------------
 // fgFindJumpTargets: walk the IL stream, determining jump target offsets
 //
 // Arguments:
 //    codeAddr   - base address of the IL code buffer
 //    codeSize   - number of bytes in the IL code buffer
-//    jumpTarget - [OUT] xxx yuuu
+//    jumpTarget - [OUT] byte array for flagging jump targets
 //
 // Notes:
-//
 //    If inlining or prejitting the root, this method also makes
 //    various observations about the method that factor into inline
 //    decisions. It sets `compNativeSizeEstimate` as a side effect.
 //
 //    May throw an exception if the IL is malformed.
+//
+//    jumpTarget[N] is set to a JT_* value if IL offset N is a 
+//    jump target in the method.
 
 void Compiler::fgFindJumpTargets(const BYTE* codeAddr,
                                  IL_OFFSET   codeSize,
@@ -4216,11 +4219,11 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr,
     if (compInlineResult != nullptr)
     {
         // Observe force inline state and code size.
-        compInlineResult->noteBool(InlineObservation::CALLEE_IS_FORCE_INLINE, isForceInline);
-        compInlineResult->noteInt(InlineObservation::CALLEE_IL_CODE_SIZE, codeSize);
+        compInlineResult->NoteBool(InlineObservation::CALLEE_IS_FORCE_INLINE, isForceInline);
+        compInlineResult->NoteInt(InlineObservation::CALLEE_IL_CODE_SIZE, codeSize);
 
         // note that we're starting to look at the opcodes.
-        compInlineResult->note(InlineObservation::CALLEE_BEGIN_OPCODE_SCAN);
+        compInlineResult->Note(InlineObservation::CALLEE_BEGIN_OPCODE_SCAN);
     }
 
     while (codeAddr < codeEndp)
@@ -4300,7 +4303,7 @@ DECODE_OPCODE:
                 noway_assert(codeAddr < codeEndp - sz);
                 if ((OPCODE) getU1LittleEndian(codeAddr + sz) == CEE_RET)
                 {
-                    compInlineResult->note(InlineObservation::CALLEE_LOOKS_LIKE_WRAPPER);
+                    compInlineResult->Note(InlineObservation::CALLEE_LOOKS_LIKE_WRAPPER);
                 }
             }
             break;
@@ -4379,8 +4382,8 @@ DECODE_OPCODE:
 
             if (compIsForInlining())
             {
-                compInlineResult->note(InlineObservation::CALLEE_HAS_SWITCH);
-                if (compInlineResult->isFailure()) 
+                compInlineResult->Note(InlineObservation::CALLEE_HAS_SWITCH);
+                if (compInlineResult->IsFailure()) 
                 {
                     return;
                 }
@@ -4495,7 +4498,7 @@ DECODE_OPCODE:
             //Consider making this only for not force inline.
             if (compIsForInlining())
             {
-                compInlineResult->noteFatal(InlineObservation::CALLEE_UNSUPPORTED_OPCODE);
+                compInlineResult->NoteFatal(InlineObservation::CALLEE_UNSUPPORTED_OPCODE);
                 return;
             }
             break;
@@ -4557,13 +4560,13 @@ INL_HANDLE_COMPARE:
                             unsigned slot0 = pushedStack.getSlot0();
                             if (fgStack::isArgument(slot0))
                             {
-                                compInlineResult->note(InlineObservation::CALLEE_ARG_FEEDS_CONSTANT_TEST);
+                                compInlineResult->Note(InlineObservation::CALLEE_ARG_FEEDS_CONSTANT_TEST);
                                 //Check for the double whammy of an incoming constant argument feeding a
                                 //constant test.
                                 varNum = fgStack::slotTypeToArgNum(slot0);
                                 if (impInlineInfo->inlArgInfo[varNum].argNode->OperIsConst())
                                 {
-                                    compInlineResult->note(InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_TEST);
+                                    compInlineResult->Note(InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_TEST);
                                 }
                             }
                         }
@@ -4578,13 +4581,13 @@ INL_HANDLE_COMPARE:
                 if ((fgStack::isConstant(slot0) && fgStack::isArgument(slot1))
                     ||(fgStack::isConstant(slot1) && fgStack::isArgument(slot0)))
                 {
-                    compInlineResult->note(InlineObservation::CALLEE_ARG_FEEDS_CONSTANT_TEST);
+                    compInlineResult->Note(InlineObservation::CALLEE_ARG_FEEDS_CONSTANT_TEST);
                 }
                 //Arg feeds range check
                 if ((fgStack::isArrayLen(slot0) && fgStack::isArgument(slot1))
                     ||(fgStack::isArrayLen(slot1) && fgStack::isArgument(slot0)))
                 {
-                    compInlineResult->note(InlineObservation::CALLEE_ARG_FEEDS_RANGE_CHECK);
+                    compInlineResult->Note(InlineObservation::CALLEE_ARG_FEEDS_RANGE_CHECK);
                 }
 
                 //Check for an incoming arg that's a constant.
@@ -4593,7 +4596,7 @@ INL_HANDLE_COMPARE:
                     varNum = fgStack::slotTypeToArgNum(slot0);
                     if (impInlineInfo->inlArgInfo[varNum].argNode->OperIsConst())
                     {
-                        compInlineResult->note(InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_TEST);
+                        compInlineResult->Note(InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_TEST);
                     }
                 }
                 if (fgStack::isArgument(slot1))
@@ -4601,7 +4604,7 @@ INL_HANDLE_COMPARE:
                     varNum = fgStack::slotTypeToArgNum(slot1);
                     if (impInlineInfo->inlArgInfo[varNum].argNode->OperIsConst())
                     {
-                        compInlineResult->note(InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_TEST);
+                        compInlineResult->Note(InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_TEST);
                     }
                 }
             }
@@ -4718,7 +4721,7 @@ ARG_WRITE:
                 /* The inliner keeps the args as trees and clones them.  Storing the arguments breaks that
                  * simplification.  To allow this, flag the argument as written to and spill it before
                  * inlining.  That way the STARG in the inlinee is trivial. */
-                compInlineResult->noteFatal(InlineObservation::CALLEE_STORES_TO_ARGUMENT);
+                compInlineResult->NoteFatal(InlineObservation::CALLEE_STORES_TO_ARGUMENT);
                 return;
             }
             else
@@ -4749,7 +4752,7 @@ _SkipCodeAddrAdjustment:
         {
             InlineObservation obs = typeIsNormed ?
                 InlineObservation::CALLEE_OPCODE_NORMED : InlineObservation::CALLEE_OPCODE;
-            compInlineResult->noteInt(obs, opcode);
+            compInlineResult->NoteInt(obs, opcode);
         }
     }
 
@@ -4772,55 +4775,47 @@ TOO_FAR:
         // cares about, and when.
         if (compInlineResult != nullptr)
         {
-            compInlineResult->note(InlineObservation::CALLEE_IS_MOSTLY_LOAD_STORE);
+            compInlineResult->Note(InlineObservation::CALLEE_IS_MOSTLY_LOAD_STORE);
         }
     }
 
     if (compInlineResult != nullptr)
     {
-        compInlineResult->note(InlineObservation::CALLEE_END_OPCODE_SCAN);
+        compInlineResult->Note(InlineObservation::CALLEE_END_OPCODE_SCAN);
 
-        // If we were estimating native code size, grab that data now.
-        if (compInlineResult->hasNativeSizeEstimate())
+        // If the inline is viable and discretionary, do the
+        // profitability screening.
+        if (compInlineResult->IsDiscretionaryCandidate())
         {
-            compNativeSizeEstimate = compInlineResult->determineNativeSizeEstimate();
-            noway_assert(compNativeSizeEstimate != NATIVE_SIZE_INVALID);
-            JITDUMP("\n\ncompNativeSizeEstimate=%d\n", compNativeSizeEstimate);
+            // Make some callsite specific observations that will feed
+            // into the profitability model.
+            impMakeDiscretionaryInlineObservations(impInlineInfo, compInlineResult);
 
-            // If we're inlining, use the size estimate to do further
-            // screening.
-            //
-            // If we're in the prejit-root case we do something
-            // similar as part of the prejit screen over in
-            // compCompileHelper.
+            // None of those observations should have changed the
+            // inline's viability.
+            assert(compInlineResult->IsCandidate());
+
             if (compIsForInlining())
             {
-                // If the inlining decision was obvious from the size of the IL,
-                // it should have been made earlier.
-                InlineObservation obs = compInlineResult->getObservation();
-                noway_assert(obs == InlineObservation::CALLEE_IS_DISCRETIONARY_INLINE);
-
-                // Make an inlining decision based on the estimated native size.
-                int callsiteNativeSizeEstimate = impEstimateCallsiteNativeSize(&impInlineInfo->inlineCandidateInfo->methInfo);
-
-                impCanInlineNative(callsiteNativeSizeEstimate,
-                                   compNativeSizeEstimate,
-                                   impInlineInfo,
-                                   compInlineResult);
-
-                if (compInlineResult->isFailure())
+                // Assess profitability...
+                CORINFO_METHOD_INFO* methodInfo = &impInlineInfo->inlineCandidateInfo->methInfo;
+                compInlineResult->DetermineProfitability(methodInfo);
+                
+                if (compInlineResult->IsFailure())
                 {
-#ifdef DEBUG
-                    if (verbose)
-                    {
-                        printf("\n\nInline expansion aborted because of impCanInlineNative: %s %s\n",
-                               compInlineResult->resultString(),
-                               compInlineResult->reasonString());
-                    }
-#endif
-
+                    JITDUMP("\n\nInline expansion aborted, inline not profitable\n");
                     return;
                 }
+                else
+                {
+                    // The inline is still viable.
+                    assert(compInlineResult->IsCandidate());
+                }
+            }
+            else
+            {
+                // Prejit root case. Profitability assessment for this
+                // is done over in compCompileHelper.
             }
         }
     }
@@ -21263,27 +21258,27 @@ unsigned     Compiler::fgCheckInlineDepthAndRecursion(InlineInfo* inlineInfo)
     const DWORD MAX_INLINING_RECURSION_DEPTH = 20;
     DWORD depth = 0;
 
-    for (; inlineContext != nullptr; inlineContext = inlineContext->getParent())
+    for (; inlineContext != nullptr; inlineContext = inlineContext->GetParent())
     {
         // Hard limit just to catch pathological cases
         depth++;
 
-        if (inlineContext->getCode() == candidateCode)
+        if (inlineContext->GetCode() == candidateCode)
         {
             // This inline candidate has the same IL code buffer as an already
             // inlined method does.
-            inlineResult->noteFatal(InlineObservation::CALLSITE_IS_RECURSIVE);
+            inlineResult->NoteFatal(InlineObservation::CALLSITE_IS_RECURSIVE);
             break;
         }
 
         if (depth > MAX_INLINING_RECURSION_DEPTH)
         {
-            inlineResult->noteFatal(InlineObservation::CALLSITE_IS_TOO_DEEP);
+            inlineResult->NoteFatal(InlineObservation::CALLSITE_IS_TOO_DEEP);
             break;
         }
     }
 
-    inlineResult->noteInt(InlineObservation::CALLSITE_DEPTH, depth);
+    inlineResult->NoteInt(InlineObservation::CALLSITE_DEPTH, depth);
     return depth;
 }
 
@@ -21307,7 +21302,7 @@ void                Compiler::fgInline()
     noway_assert(block != nullptr);
 
     // Set the root inline context on all statements
-    InlineContext* rootContext = InlineContext::newRoot(this);
+    InlineContext* rootContext = InlineContext::NewRoot(this);
 
     for (; block != nullptr; block = block->bbNext)
     {
@@ -21474,7 +21469,7 @@ void Compiler::fgNoteNonInlineCandidate(GenTreePtr   tree,
     // this call was not a candidate.
     InlineObservation priorObservation = call->gtInlineObservation;
 
-    if (inlIsValidObservation(priorObservation))
+    if (InlIsValidObservation(priorObservation))
     {
         currentObservation = priorObservation;
     }
@@ -21484,23 +21479,23 @@ void Compiler::fgNoteNonInlineCandidate(GenTreePtr   tree,
     // here too.  Also note there's no need to re-report these
     // failures, since we reported them during the initial
     // candidate scan.
-    InlineImpact impact = inlGetImpact(currentObservation);
+    InlineImpact impact = InlGetImpact(currentObservation);
 
     if (impact == InlineImpact::FATAL)
     {
-        inlineResult.noteFatal(currentObservation);
+        inlineResult.NoteFatal(currentObservation);
     }
     else
     {
-        inlineResult.note(currentObservation);
+        inlineResult.Note(currentObservation);
     }
 
-    inlineResult.setReported();
+    inlineResult.SetReported();
 
     if (call->gtCallType == CT_USER_FUNC)
     {
         // Create InlineContext for the failure
-        InlineContext::newFailure(this, tree, &inlineResult);
+        InlineContext::NewFailure(this, tree, &inlineResult);
     }
 }
 
@@ -21801,7 +21796,7 @@ void       Compiler::fgInvokeInlineeCompiler(GenTreeCall*  call,
 
     unsigned inlineDepth = fgCheckInlineDepthAndRecursion(&inlineInfo);
 
-    if (inlineResult->isFailure())
+    if (inlineResult->IsFailure())
     {
 #ifdef DEBUG
         if (verbose)
@@ -21832,7 +21827,7 @@ void       Compiler::fgInvokeInlineeCompiler(GenTreeCall*  call,
         // Init the local var info of the inlinee
         pParam->pThis->impInlineInitVars(pParam->inlineInfo);
 
-        if (pParam->inlineInfo->inlineResult->isCandidate())
+        if (pParam->inlineInfo->inlineResult->IsCandidate())
         {
             /* Clear the temp table */
             memset(pParam->inlineInfo->lclTmpNum, -1, sizeof(pParam->inlineInfo->lclTmpNum));
@@ -21887,9 +21882,9 @@ void       Compiler::fgInvokeInlineeCompiler(GenTreeCall*  call,
                 // a catch-all something bad happened observation.
                 InlineResult* innerInlineResult = pParam->inlineInfo->inlineResult;
 
-                if (!innerInlineResult->isFailure())
+                if (!innerInlineResult->IsFailure())
                 {
-                    innerInlineResult->noteFatal(InlineObservation::CALLSITE_COMPILATION_FAILURE);
+                    innerInlineResult->NoteFatal(InlineObservation::CALLSITE_COMPILATION_FAILURE);
                 }
             }
         }
@@ -21906,14 +21901,14 @@ void       Compiler::fgInvokeInlineeCompiler(GenTreeCall*  call,
 
         // If we haven't yet determined why this inline fails, use
         // a catch-all something bad happened observation.
-        if (!inlineResult->isFailure())
+        if (!inlineResult->IsFailure())
         {
-            inlineResult->noteFatal(InlineObservation::CALLSITE_COMPILATION_ERROR);
+            inlineResult->NoteFatal(InlineObservation::CALLSITE_COMPILATION_ERROR);
         }
     }
     endErrorTrap();
 
-    if (inlineResult->isFailure())
+    if (inlineResult->IsFailure())
     {
 #if defined(DEBUG) || MEASURE_INLINING
         ++Compiler::jitInlineInitVarsFailureCount;
@@ -21943,7 +21938,7 @@ void       Compiler::fgInvokeInlineeCompiler(GenTreeCall*  call,
                     eeGetMethodFullName(fncHandle));
         }
 #endif // DEBUG
-        inlineResult->noteFatal(InlineObservation::CALLEE_LACKS_RETURN);
+        inlineResult->NoteFatal(InlineObservation::CALLEE_LACKS_RETURN);
         return;
     }
 
@@ -21954,7 +21949,7 @@ void       Compiler::fgInvokeInlineeCompiler(GenTreeCall*  call,
         if (!(info.compCompHnd->initClass(NULL /* field */, fncHandle /* method */,
                 inlineCandidateInfo->exactContextHnd /* context */) & CORINFO_INITCLASS_INITIALIZED))
         {
-            inlineResult->noteFatal(InlineObservation::CALLEE_CLASS_INIT_FAILURE);
+            inlineResult->NoteFatal(InlineObservation::CALLEE_CLASS_INIT_FAILURE);
             return;
         }
     }
@@ -21976,7 +21971,7 @@ void       Compiler::fgInvokeInlineeCompiler(GenTreeCall*  call,
                eeGetMethodFullName(fncHandle),
                inlineCandidateInfo->methInfo.ILCodeSize,
                inlineDepth,
-               inlineResult->reasonString());
+               inlineResult->ReasonString());
     }
 
     if (verbose)
@@ -21990,7 +21985,7 @@ void       Compiler::fgInvokeInlineeCompiler(GenTreeCall*  call,
 #endif
 
     // We inlined...
-    inlineResult->noteSuccess();
+    inlineResult->NoteSuccess();
 }
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -22040,7 +22035,7 @@ void Compiler::fgInsertInlineeBlocks(InlineInfo* pInlineInfo)
     //
     // Create a new inline context and mark the inlined statements with it
     //
-    InlineContext* calleeContext = InlineContext::newSuccess(this, pInlineInfo);
+    InlineContext* calleeContext = InlineContext::NewSuccess(this, pInlineInfo);
 
     for (block = InlineeCompiler->fgFirstBB;
          block != nullptr;

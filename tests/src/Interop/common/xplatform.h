@@ -1,3 +1,7 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
 #ifndef __XPLAT_H__
 #define __XPLAT_H__
 
@@ -30,6 +34,11 @@
 // dllexport
 #if defined _WIN32
 #define DLL_EXPORT __declspec(dllexport)
+
+#ifndef snprintf
+#define snprintf _snprintf
+#endif //snprintf
+
 #else //!_Win32
 #if __GNUC__ >= 4    
 #define DLL_EXPORT __attribute__ ((visibility ("default")))

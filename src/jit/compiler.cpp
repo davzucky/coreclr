@@ -1407,8 +1407,6 @@ void                Compiler::compInit(ArenaAllocator * pAlloc, InlineInfo * inl
 
     compMaxUncheckedOffsetForNullObject = MAX_UNCHECKED_OFFSET_FOR_NULL_OBJECT;
 
-    compNativeSizeEstimate = NATIVE_SIZE_INVALID;
-
     for (unsigned i = 0; i < MAX_LOOP_NUM; i++)
     {
         AllVarSetOps::AssignNoCopy(this, optLoopTable[i].lpAsgVars, AllVarSetOps::UninitVal());
@@ -4233,7 +4231,7 @@ int           Compiler::compCompile(CORINFO_METHOD_HANDLE methodHnd,
     {
         if (compIsForInlining())
         {
-            compInlineResult->noteFatal(InlineObservation::CALLEE_MARKED_AS_SKIPPED);
+            compInlineResult->NoteFatal(InlineObservation::CALLEE_MARKED_AS_SKIPPED);
         }
         return CORJIT_SKIPPED;
     }
@@ -4843,49 +4841,29 @@ int           Compiler::compCompileHelper (CORINFO_MODULE_HANDLE            clas
             // the code in fgFindJumpTargets references that data
             // member extensively.
             assert(compInlineResult == nullptr);
+            assert(impInlineInfo == nullptr);
             compInlineResult = &prejitResult;
 
             // Find the basic blocks. We must do this regardless of
             // inlineability, since we are prejitting this method.
             //
-            // Among other things, this will set compNativeSizeEstimate
-            // for the subset of methods we check below.
+            // This will also update the status of this method as
+            // an inline candidate.
             fgFindBasicBlocks();
 
             // Undo the temporary setup.
             assert(compInlineResult == &prejitResult);
             compInlineResult = nullptr;
 
-            // If this method is still a viable inline candidate,
-            // do the profitability screening.
-            if (prejitResult.isCandidate())
+            // If still a viable, discretionary inline, assess
+            // profitability.
+            if (prejitResult.IsDiscretionaryCandidate())
             {
-                // Only needed if the inline is discretionary.
-                InlineObservation obs = prejitResult.getObservation();
-                if (obs == InlineObservation::CALLEE_IS_DISCRETIONARY_INLINE)
-                {
-                    // We should have run the CodeSeq state machine
-                    // and got the native size estimate.
-                    assert(compNativeSizeEstimate != NATIVE_SIZE_INVALID);
-
-                    // Estimate the call site impact
-                    int callsiteNativeSizeEstimate = impEstimateCallsiteNativeSize(methodInfo);
-
-                    // See if we're willing to pay for inlining this method
-                    impCanInlineNative(callsiteNativeSizeEstimate,
-                                       compNativeSizeEstimate,
-                                       nullptr, // Calculate static inlining hint.
-                                       &prejitResult);
-                }
-            }
-            else
-            {
-                // If it's not a candidate, it should be a failure.
-                assert(prejitResult.isFailure());
+                prejitResult.DetermineProfitability(methodInfo);
             }
 
             // Handle the results of the inline analysis.
-            if (prejitResult.isFailure())
+            if (prejitResult.IsFailure())
             {
                 // This method is a bad inlinee according to our
                 // analysis.  We will let the InlineResult destructor
@@ -4893,13 +4871,13 @@ int           Compiler::compCompileHelper (CORINFO_MODULE_HANDLE            clas
                 // jit some work.
                 //
                 // This decision better not be context-dependent.
-                assert(prejitResult.isNever());
+                assert(prejitResult.IsNever());
             }
             else
             {
                 // This looks like a viable inline candidate.  Since
                 // we're not actually inlining, don't report anything.
-                prejitResult.setReported();
+                prejitResult.SetReported();
             }
         }
         else
@@ -4951,9 +4929,9 @@ int           Compiler::compCompileHelper (CORINFO_MODULE_HANDLE            clas
 
         if (compIsForInlining())
         {
-            compInlineResult->noteInt(InlineObservation::CALLEE_NUMBER_OF_BASIC_BLOCKS, fgBBcount);
+            compInlineResult->NoteInt(InlineObservation::CALLEE_NUMBER_OF_BASIC_BLOCKS, fgBBcount);
 
-            if (compInlineResult->isFailure())
+            if (compInlineResult->IsFailure())
             {
                 goto _Next;
             }
@@ -5623,7 +5601,7 @@ START:
         {
             // Note that we failed to compile the inlinee, and that
             // there's no point trying to inline it again anywhere else.
-            inlineInfo->inlineResult->noteFatal(InlineObservation::CALLEE_COMPILATION_ERROR);
+            inlineInfo->inlineResult->NoteFatal(InlineObservation::CALLEE_COMPILATION_ERROR);
         }
         param.result = __errc;       
     }
