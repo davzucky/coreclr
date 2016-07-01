@@ -4,7 +4,7 @@ PYTHON=${PYTHON:-python}
 
 usage()
 {
-    echo "Usage: $0 [BuildArch] [BuildType] [clean] [verbose] [coverage] [cross] [clangx.y] [ninja] [configureonly] [skipconfigure] [skipnative] [skipmscorlib] [skiptests] [cmakeargs] [bindir]"
+    echo "Usage: $0 [BuildArch] [BuildType] [clean] [verbose] [coverage] [cross] [clangx.y] [ninja] [configureonly] [skipconfigure] [skipnative] [skipmscorlib] [skiptests] [staticLibLink] [cmakeargs] [bindir]"
     echo "BuildArch can be: x64, x86, arm, arm-softfp, arm64"
     echo "BuildType can be: debug, checked, release"
     echo "clean - optional argument to force a clean build."
@@ -22,6 +22,7 @@ usage()
     echo "skiprestore - skip restoring nuget packages."
     echo "skipnuget - skip building nuget packages."
     echo "disableoss - Disable Open Source Signing for mscorlib."
+    echo "staticLibLink - Optional argument to statically link any native library."
     echo "skipgenerateversion - disable version generation even if MSBuild is supported."
     echo "cmakeargs - user-settable additional arguments passed to CMake."
     echo "bindir - output directory (defaults to $__ProjectRoot/bin)"
@@ -596,9 +597,13 @@ while :; do
             __SignTypeReal="/p:SignType=real"
             ;;
 
+	staticliblink)
+	    __cmakeargs="$__cmakeargs -DCMAKE_STATIC_LIB_LINK=1"
+	    ;;
+
         cmakeargs)
             if [ -n "$2" ]; then
-                __cmakeargs="$2"
+                __cmakeargs="$__cmakeargs $2"
                 shift
             else
                 echo "ERROR: 'cmakeargs' requires a non-empty option argument"

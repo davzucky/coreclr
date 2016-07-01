@@ -14,6 +14,10 @@ if(UTYPES_H STREQUAL UTYPES_H-NOTFOUND)
     return()
 endif()
 
+#if(CMAKE_STATIC_LIB_LINK)
+   set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+#endif(CMAKE_STATIC_LIB_LINK)
+
 if(NOT CLR_CMAKE_PLATFORM_DARWIN)
     find_library(ICUUC icuuc)
     if(ICUUC STREQUAL ICUUC-NOTFOUND)
@@ -26,6 +30,7 @@ if(NOT CLR_CMAKE_PLATFORM_DARWIN)
         message(FATAL_ERROR "Cannot find libicui18n, try installing libicu-dev (or the appropriate package for your platform)")
         return()
     endif()
+    find_library(ICUDATA icudata)
 else()
     find_library(ICUCORE icucore)
     if(ICUI18N STREQUAL ICUCORE-NOTFOUND)
@@ -34,9 +39,10 @@ else()
     endif()
 endif()
 
+message(${CMAKE_EXE_LINKER_FLAGS})
 include(configure.cmake)
 
-add_compile_options(-fPIC)
+#add_compile_options(-fPIC)
 
 set(NATIVEGLOBALIZATION_SOURCES
     calendarData.cpp
@@ -52,7 +58,7 @@ set(NATIVEGLOBALIZATION_SOURCES
 
 include_directories(${UTYPES_H})
 
-_add_library(System.Globalization.Native
+add_library(System.Globalization.Native
     SHARED
     ${NATIVEGLOBALIZATION_SOURCES}
 )
@@ -61,10 +67,13 @@ _add_library(System.Globalization.Native
 set_target_properties(System.Globalization.Native PROPERTIES PREFIX "")
 
 if(NOT CLR_CMAKE_PLATFORM_DARWIN)
-    target_link_libraries(System.Globalization.Native
-        ${ICUUC}
-        ${ICUI18N}
-    )
+   set(TARGET CMAKE_LINK_LIBRARY_FLAG "${CMAKE_LINK_LIBRARY_FLAG} ${ICUUC} ${ICUI18N} ${ICUDATA}")
+#target_link_libraries(
+#       System.Globalization.Native
+#       ${ICUUC}
+#       ${ICUI18N}
+#       ${ICUDATA}
+#    )
 else()
     target_link_libraries(System.Globalization.Native
         ${ICUCORE}
